@@ -1,158 +1,92 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <title>Dự báo Doanh thu Sản phẩm</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dự báo Doanh thu</title>
 </head>
-<body class="p-4">
-  <div class="container">
-    <h2 class="mb-4">🔮 Dự báo Doanh thu Sản phẩm theo Tháng</h2>
+<body>
+  <h2>📊 Dự báo Doanh thu Sản phẩm</h2>
+  <form id="forecastForm">
+    <label>CSV: <input type="file" id="csvFile" /></label><br/>
+    <label>StockCode: <input type="text" id="product" /></label><br/>
+    <label>Country: <input type="text" id="country" /></label><br/>
+    <label>Tháng cần dự báo: <input type="number" id="forecastMonths" value="3" /></label><br/>
+    <label>Ngưỡng cảnh báo (%): <input type="number" id="alertThreshold" value="10" /></label><br/>
+    <button type="submit">Chạy dự báo</button>
+  </form>
 
-    <form id="forecastForm" enctype="multipart/form-data">
-      <div class="mb-3">
-        <label for="product" class="form-label">Sản phẩm</label>
-        <select class="form-select" id="product" required>
-          <option selected disabled>Chọn mã sản phẩm...</option>
-        </select>
-      </div>
+  <div id="forecastResult"></div>
+  <div id="insightSection"></div>
 
-      <div class="mb-3">
-        <label for="forecastMonths" class="form-label">Số tháng cần dự báo</label>
-        <input type="number" id="forecastMonths" class="form-control" value="1" min="1">
-      </div>
-
-      <div class="mb-3">
-        <label for="country" class="form-label">Quốc gia</label>
-        <select class="form-select" id="country">
-          <option selected disabled>Chọn quốc gia...</option>
-        </select>
-      </div>
-
-      <div class="mb-3">
-        <label for="threshold" class="form-label">Ngưỡng cảnh báo (%)</label>
-        <input type="number" id="threshold" class="form-control" value="10">
-      </div>
-
-      <div class="mb-3">
-        <label for="csvFile" class="form-label">Chọn file CSV dữ liệu</label>
-        <input type="file" class="form-control" id="csvFile" accept=".csv">
-      </div>
-
-      <button type="submit" class="btn btn-primary">Chạy dự báo</button>
-    </form>
-
-    <hr>
-    <div id="results" class="mt-4">
-      <h4>Kết quả Dự báo</h4>
-      <div id="forecastTable"></div>
-      <canvas id="forecastChart" height="150"></canvas>
-    </div>
-
-    <div id="suggestions" class="mt-4">
-      <h4>🔍 Phân tích & Gợi ý</h4>
-      <div id="suggestionText" class="text-info"></div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    document.getElementById('forecastForm').addEventListener('submit', async function(e) {
+    document.getElementById("forecastForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-
       const formData = new FormData();
-      formData.append('file', document.getElementById('csvFile').files[0]);
-      formData.append('stockCode', document.getElementById('product').value);
-      formData.append('country', document.getElementById('country').value);
-      formData.append('months', document.getElementById('forecastMonths').value);
+      const fileInput = document.getElementById("csvFile");
+      if (fileInput.files.length === 0) {
+        alert("Vui lòng chọn file CSV.");
+        return;
+      }
+      formData.append("file", fileInput.files[0]);
+      formData.append("stockCode", document.getElementById("product").value);
+      formData.append("country", document.getElementById("country").value);
+      formData.append("months", document.getElementById("forecastMonths").value);
 
-      const res = await fetch('https://forecast-app-ready.onrender.com/forecast', {
-        method: 'POST',
-        body: formData
+      const res = await fetch("https://forecast-app-ready.onrender.com/forecast", {
+        method: "POST",
+        body: formData,
       });
 
       const data = await res.json();
+      const forecastBox = document.getElementById("forecastResult");
+      const insightBox = document.getElementById("insightSection");
 
       if (res.ok) {
-        const labels = data.map(d => d.ds.split('T')[0]);
-        const yhat = data.map(d => d.yhat.toFixed(2));
-        const pct = data.map(d => d.pct_change.toFixed(1));
+        const alertThreshold = parseFloat(document.getElementById("alertThreshold").value);
+        const stockCode = data[0].stockCode;
 
-        const tableHTML = `
-          <table class="table table-bordered mt-3">
-            <thead><tr><th>Tháng</th><th>Dự báo</th><th>So với TB 3T (%)</th></tr></thead>
-            <tbody>${data.map(row => `
+        forecastBox.innerHTML = `
+          <table border="1" style="margin-top:10px;width:100%">
+            <tr><th>Tháng</th><th>Dự báo</th><th>So với TB 3T (%)</th></tr>
+            ${data.map(d => `
               <tr>
-                <td>${row.ds.split('T')[0]}</td>
-                <td>${row.yhat.toFixed(2)}</td>
-                <td class="${Math.abs(row.pct_change) > 10 ? 'text-danger' : ''}">${row.pct_change.toFixed(1)}%</td>
-              </tr>`).join('')}
-            </tbody>
+                <td>${new Date(d.ds).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: 'short' })}</td>
+                <td>${d.yhat.toFixed(2)}</td>
+                <td style="color:${Math.abs(d.pct_change) > alertThreshold ? 'red' : 'black'}">
+                  ${d.pct_change.toFixed(1)}%
+                </td>
+              </tr>
+            `).join("")}
           </table>
         `;
-        document.getElementById('forecastTable').innerHTML = tableHTML;
 
-        const ctx = document.getElementById('forecastChart').getContext('2d');
-        if (window.chartInstance) window.chartInstance.destroy();
-        window.chartInstance = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [{
-              label: 'Dự báo Doanh thu',
-              data: yhat,
-              borderWidth: 2
-            }]
-          },
-          options: {
-            responsive: true
+        const insights = data.map(d => {
+          const month = new Date(d.ds).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: 'short' });
+          const pct = d.pct_change;
+          if (pct > 0) {
+            return `📈 Tháng ${month} có xu hướng tăng. Xem xét tăng nhập hàng và tối ưu giá bán.`;
+          } else {
+            return `📉 Tháng ${month} có xu hướng giảm. Cần xem xét khuyến mãi hoặc giảm hàng tồn.`;
           }
         });
 
-        const suggest = data.map(d => {
-          if (d.pct_change > 10) return `📈 Tháng ${d.ds.slice(0, 7)} có xu hướng tăng mạnh. Xem xét tăng nhập hàng.`;
-          if (d.pct_change < -10) return `⚠️ Tháng ${d.ds.slice(0, 7)} doanh thu sụt giảm. Cần khuyến mãi hoặc giảm tồn kho.`;
-          return `✅ Tháng ${d.ds.slice(0, 7)} ổn định. Duy trì chiến lược hiện tại.`;
-        }).join('<br>');
-        document.getElementById('suggestionText').innerHTML = suggest;
-      } else {
-        alert("Lỗi: " + data.error);
+        const alerts = data
+          .filter(d => Math.abs(d.pct_change) > alertThreshold)
+          .map(d => {
+            const pct = d.pct_change.toFixed(1);
+            return `⚠️ Sản phẩm ${stockCode} có biến động doanh thu ${pct}%. Rủi ro tồn kho.`;
+          });
+
+        insightBox.innerHTML = `
+          <ul>${insights.map(txt => `<li>${txt}</li>`).join("")}</ul>
+          <div style="color:red">${alerts.join("<br/>")}</div>
+          <div style="color:blue;margin-top:8px">
+            💡 Duy trì theo dõi định kỳ. Cập nhật mô hình mỗi tháng để phản ánh biến động mới.
+          </div>
+        `;
       }
-    });
-
-    document.getElementById('csvFile').addEventListener('change', function () {
-      const file = this.files[0];
-
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-          const stockSet = new Set();
-          const countrySet = new Set();
-
-          results.data.slice(0, 300).forEach(row => {
-            if (row['StockCode']) stockSet.add(row['StockCode'].trim());
-            if (row['Country'] && isNaN(row['Country'].trim())) {
-  countrySet.add(row['Country'].trim());
-}
-          });
-
-          const productDropdown = document.getElementById('product');
-          const countryDropdown = document.getElementById('country');
-
-          productDropdown.innerHTML = '<option selected disabled>Chọn mã sản phẩm...</option>';
-          countryDropdown.innerHTML = '<option selected disabled>Chọn quốc gia...</option>';
-
-          [...stockSet].sort().forEach(code => {
-            productDropdown.innerHTML += `<option value="${code}">${code}</option>`;
-          });
-
-          [...countrySet].sort().forEach(country => {
-            countryDropdown.innerHTML += `<option value="${country}">${country}</option>`;
-          });
-        }
-      });
     });
   </script>
 </body>
