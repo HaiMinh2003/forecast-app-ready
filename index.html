@@ -67,6 +67,8 @@
       formData.append('country', document.getElementById('country').value);
       formData.append('months', document.getElementById('forecastMonths').value);
 
+      const threshold = parseFloat(document.getElementById('threshold').value);
+
       const res = await fetch('https://forecast-app-ready.onrender.com/forecast', {
         method: 'POST',
         body: formData
@@ -86,7 +88,7 @@
               <tr>
                 <td>${row.ds.split('T')[0]}</td>
                 <td>${row.yhat.toFixed(2)}</td>
-                <td class="${Math.abs(row.pct_change) > 10 ? 'text-danger' : ''}">${row.pct_change.toFixed(1)}%</td>
+                <td class="${Math.abs(row.pct_change) > threshold ? 'text-danger' : ''}">${row.pct_change.toFixed(1)}%</td>
               </tr>`).join('')}
             </tbody>
           </table>
@@ -110,12 +112,32 @@
           }
         });
 
-        const suggest = data.map(d => {
-          if (d.pct_change > 10) return `📈 Tháng ${d.ds.slice(0, 7)} có xu hướng tăng mạnh. Xem xét tăng nhập hàng.`;
-          if (d.pct_change < -10) return `⚠️ Tháng ${d.ds.slice(0, 7)} doanh thu sụt giảm. Cần khuyến mãi hoặc giảm tồn kho.`;
-          return `✅ Tháng ${d.ds.slice(0, 7)} ổn định. Duy trì chiến lược hiện tại.`;
-        }).join('<br>');
-        document.getElementById('suggestionText').innerHTML = suggest;
+        // Gợi ý mới chuẩn hơn
+        let suggestions = [];
+        const product = document.getElementById('product').value;
+        data.forEach((d, i) => {
+          const date = new Date(d.ds);
+          const monthLabel = `Tháng ${date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit' })}`;
+          const pct = d.pct_change;
+          const yhat = d.yhat;
+          const tb3t = d.avg_yhat;
+
+          // (1) phân tích chính
+          if (yhat > tb3t) {
+            suggestions.push(`${monthLabel} có xu hướng tăng. Xem xét tăng nhập hàng và tối ưu giá bán.`);
+          } else {
+            suggestions.push(`${monthLabel} có xu hướng giảm. Cần xem xét khuyến mãi hoặc giảm hàng tồn.`);
+          }
+
+          // (2) cảnh báo
+          if (Math.abs(pct) > threshold) {
+            suggestions.push(`⚠️ Sản phẩm ${product} có biến động doanh thu ${pct.toFixed(1)}%. Rủi ro tồn kho.`);
+          }
+        });
+
+        // (3) gợi ý tổng
+        suggestions.push('💡 Duy trì theo dõi định kỳ. Cập nhật mô hình mỗi tháng để phản ánh biến động mới.');
+        document.getElementById('suggestionText').innerHTML = suggestions.map(s => '📝 ' + s).join('<br>');
       } else {
         alert("Lỗi: " + data.error);
       }
@@ -134,8 +156,8 @@
           results.data.slice(0, 300).forEach(row => {
             if (row['StockCode']) stockSet.add(row['StockCode'].trim());
             if (row['Country'] && isNaN(row['Country'].trim())) {
-  countrySet.add(row['Country'].trim());
-}
+              countrySet.add(row['Country'].trim());
+            }
           });
 
           const productDropdown = document.getElementById('product');
