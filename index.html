@@ -74,17 +74,20 @@
         body: formData
       });
 
-      const data = await res.json();
+      const responseJson = await res.json();
 
       if (res.ok) {
-        const labels = data.map(d => d.ds.split('T')[0]);
-        const yhat = data.map(d => d.yhat.toFixed(2));
-        const pct = data.map(d => d.pct_change.toFixed(1));
+        const forecastData = responseJson.forecast;
+        const comment = responseJson.comment;
+
+        const labels = forecastData.map(d => d.ds.split('T')[0]);
+        const yhat = forecastData.map(d => d.yhat.toFixed(2));
+        const pct = forecastData.map(d => d.pct_change.toFixed(1));
 
         const tableHTML = `
           <table class="table table-bordered mt-3">
             <thead><tr><th>Tháng</th><th>Dự báo</th><th>So với TB 3T (%)</th></tr></thead>
-            <tbody>${data.map(row => `
+            <tbody>${forecastData.map(row => `
               <tr>
                 <td>${row.ds.split('T')[0]}</td>
                 <td>${row.yhat.toFixed(2)}</td>
@@ -92,6 +95,7 @@
               </tr>`).join('')}
             </tbody>
           </table>
+          <div class="alert alert-info mt-3"><strong>📝 Nhận xét:</strong> ${comment}</div>
         `;
         document.getElementById('forecastTable').innerHTML = tableHTML;
 
@@ -112,34 +116,31 @@
           }
         });
 
-        // Gợi ý mới chuẩn hơn
+        // Gợi ý chi tiết
         let suggestions = [];
         const product = document.getElementById('product').value;
-        data.forEach((d, i) => {
+        forecastData.forEach((d) => {
           const date = new Date(d.ds);
-          const monthLabel = `Tháng ${date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit' })}`;
+          const monthLabel = `Tháng ${date.getMonth() + 1}/${date.getFullYear()}`;
           const pct = d.pct_change;
           const yhat = d.yhat;
-          const tb3t = d.avg_yhat;
+          const tb3t = yhat - d.delta;
 
-          // (1) phân tích chính
           if (yhat > tb3t) {
             suggestions.push(`${monthLabel} có xu hướng tăng. Xem xét tăng nhập hàng và tối ưu giá bán.`);
           } else {
             suggestions.push(`${monthLabel} có xu hướng giảm. Cần xem xét khuyến mãi hoặc giảm hàng tồn.`);
           }
 
-          // (2) cảnh báo
           if (Math.abs(pct) > threshold) {
             suggestions.push(`⚠️ Sản phẩm ${product} có biến động doanh thu ${pct.toFixed(1)}%. Rủi ro tồn kho.`);
           }
         });
 
-        // (3) gợi ý tổng
         suggestions.push('💡 Duy trì theo dõi định kỳ. Cập nhật mô hình mỗi tháng để phản ánh biến động mới.');
         document.getElementById('suggestionText').innerHTML = suggestions.map(s => '📝 ' + s).join('<br>');
       } else {
-        alert("Lỗi: " + data.error);
+        alert("Lỗi: " + responseJson.error);
       }
     });
 
