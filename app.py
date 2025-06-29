@@ -4,7 +4,7 @@ import pandas as pd
 from prophet import Prophet
 
 app = Flask(__name__)
-CORS(app)  # Cho phép mọi origin gọi đến API
+CORS(app)
 
 @app.route('/forecast', methods=['POST'])
 def forecast():
@@ -37,8 +37,24 @@ def forecast():
     forecast['delta'] = forecast['yhat'] - recent_avg
     forecast['pct_change'] = 100 * forecast['delta'] / recent_avg
 
+    # Tính phần nhận xét dựa trên trung bình dự báo
+    forecasted_mean = forecast['yhat'].tail(forecast_months).mean()
+    pct_total_change = (forecasted_mean - recent_avg) / recent_avg * 100
+
+    if pct_total_change > 10:
+        comment = f"Biểu đồ cho thấy xu hướng TĂNG, doanh thu dự kiến tăng khoảng {pct_total_change:.1f}% so với trung bình 3 tháng gần nhất."
+    elif pct_total_change < -10:
+        comment = f"Biểu đồ cho thấy xu hướng GIẢM, doanh thu dự kiến giảm khoảng {abs(pct_total_change):.1f}% so với trung bình 3 tháng gần nhất."
+    else:
+        comment = "Biểu đồ cho thấy doanh thu dự báo ỔN ĐỊNH, không biến động lớn."
+
     result = forecast[['ds', 'yhat', 'delta', 'pct_change']].tail(forecast_months).to_dict(orient='records')
-    return jsonify(result)
+
+    # Trả thêm comment trong JSON
+    return jsonify({
+        'forecast': result,
+        'comment': comment
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
